@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#1e1e1e">
+    <meta name="description" content="A browser-based DOS batch file editor and virtual command prompt.">
+    <title>FreeDOS Studio</title>
+    <link rel="stylesheet" href="./styles.css">
+    <script src="./assets/v86/build/libv86.js" defer></script>
+    <script src="./freedos.js" defer></script>
+    <script src="./app.js" defer></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">F<span>D</span></span>
+        <span class="brand-name">FreeDOS <b>Studio</b></span>
+      </div>
+      <span class="window-title" id="window-title">START.BAT — FreeDOS Studio</span>
+      <div class="topbar-right">
+        <a class="github-link" href="https://github.com/yourneighborhoodyapper5-hash/Batch-file-runner-online-no-virus-peak-free-all-use-freedos" target="_blank" rel="noreferrer">Repository <span aria-hidden="true">↗</span></a>
+      </div>
+    </header>
+
+    <main>
+      <section class="workbench" aria-label="DOS batch file IDE">
+        <div class="toolbar">
+          <div class="toolbar-group">
+            <button class="tool-button" id="new-file" type="button" title="Create a new file"><span class="tool-icon">＋</span> New</button>
+            <button class="tool-button" id="import-file" type="button" title="Import a .BAT or .CMD file"><span class="tool-icon">↑</span> Import</button>
+            <input id="import-file-input" type="file" accept=".bat,.cmd,text/plain" hidden>
+            <button class="tool-button" id="save-file" type="button" title="Save current file"><span class="tool-icon">▣</span> Save</button>
+            <button class="tool-button" id="download-file" type="button" title="Download current file"><span class="tool-icon">↓</span> Export</button>
+          </div>
+          <div class="toolbar-group toolbar-right">
+            <span class="shortcut-hint">CTRL + ENTER TO RUN IN PROMPT</span>
+            <button class="tool-button" id="run-file" type="button" title="Run in the lightweight browser interpreter"><span class="tool-icon">›_</span> Run in prompt</button>
+            <button class="run-button" id="run-freedos" type="button" title="Run this batch file in FreeDOS"><span aria-hidden="true">▶</span> Run in FreeDOS</button>
+          </div>
+        </div>
+
+        <div class="workspace">
+          <aside class="activity-bar" aria-label="Activity bar">
+            <button id="toggle-explorer" class="activity-button active" type="button" aria-label="Toggle Explorer" aria-pressed="true" title="Toggle Explorer">
+              <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3.5 5.5h6l2 2h9v11h-17z"></path>
+                <path d="M3.5 8h17"></path>
+              </svg>
+            </button>
+          </aside>
+          <aside class="explorer" aria-label="Virtual drive files">
+            <div class="panel-heading"><span>EXPLORER</span><button id="new-file-small" type="button" aria-label="Create a new file" title="New file">＋</button></div>
+            <div class="folder-label"><span aria-hidden="true">⌄</span> <span class="folder-icon">▰</span> C:\</div>
+            <div id="file-list" class="file-list"></div>
+            <div class="explorer-footer"><span class="drive-indicator"></span><span id="file-count">0 FILES</span><span class="drive-size">VIRTUAL DRIVE</span></div>
+          </aside>
+
+          <section class="editor-panel" aria-label="Code editor">
+            <div class="editor-tabs">
+              <div class="active-tab"><span class="file-type-icon">▤</span><span id="tab-name">START.BAT</span><span class="tab-unsaved" id="unsaved-marker" hidden>●</span></div>
+              <span class="tab-spacer"></span>
+              <span class="editor-mode" id="editor-mode">DOS BATCH</span>
+            </div>
+            <div class="editor-meta"><span id="file-path">C:\START.BAT</span><span>UTF-8</span></div>
+            <div class="editor-wrap">
+              <pre class="line-numbers" id="line-numbers" aria-hidden="true">1</pre>
+              <textarea id="editor" aria-label="Batch file editor" spellcheck="false" autocapitalize="off" autocomplete="off" autocorrect="off"></textarea>
+            </div>
+            <div class="editor-status"><span><i></i> Ready</span><span id="cursor-position">Ln 1, Col 1</span></div>
+          </section>
+
+          <section class="terminal-panel" aria-label="DOS terminal">
+            <div class="terminal-heading"><div><span class="terminal-icon">›_</span><span>TERMINAL</span></div><button id="clear-terminal" type="button" title="Clear terminal">Clear</button></div>
+            <div class="terminal-screen" id="terminal-output" role="log" aria-live="polite">
+              <div class="terminal-welcome">
+                <div class="ascii-logo">FreeDOS<span>_</span></div>
+                <div>Browser-based DOS workspace</div>
+                <div class="terminal-muted">Type <b>HELP</b> for available commands.</div>
+                <br>
+              </div>
+            </div>
+            <form class="terminal-input-row" id="command-form">
+              <label for="command-input"><span id="prompt-path">C:\&gt;</span></label>
+              <input id="command-input" type="text" aria-label="Enter a DOS command" autocomplete="off" autocapitalize="off" spellcheck="false">
+              <button type="submit" aria-label="Run command">↵</button>
+            </form>
+            <div class="terminal-footer"><span><i></i> VIRTUAL DOS ENVIRONMENT</span><span>SAFE MODE</span></div>
+          </section>
+        </div>
+        <div class="statusbar"><span><i></i> FREEDOS STUDIO</span><span>FILES STORED IN THIS BROWSER</span></div>
+      </section>
+
+    </main>
+    <dialog id="dos-dialog" class="dos-dialog" aria-labelledby="dos-dialog-title">
+      <div class="dos-dialog-content">
+        <div class="dos-dialog-heading">
+          <div><span class="terminal-icon">›_</span><strong id="dos-dialog-title">FREEDOS EMULATOR</strong></div>
+          <button id="close-dos" type="button" aria-label="Close FreeDOS">CLOSE</button>
+        </div>
+        <div id="dos-screen" class="dos-screen" aria-label="FreeDOS screen">
+          <div></div>
+          <canvas hidden></canvas>
+        </div>
+        <p id="dos-status" class="dos-status" role="status" aria-live="polite">Ready.</p>
+        <p class="dos-note">Your batch file runs in an isolated virtual machine. It cannot access your computer's files.</p>
+      </div>
+    </dialog>
+  </body>
+</html>
