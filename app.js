@@ -449,7 +449,8 @@
     dosStatus.textContent = "Loading the FreeDOS emulator. The first launch may take a moment.";
     dosDialog.showModal();
     try {
-      await window.FreeDosRunner.run(files[currentFile], dosScreen, status => {
+      const appFiles = await loadAppsDirectory();
+      await window.FreeDosRunner.run(files[currentFile], appFiles, dosScreen, status => {
         dosStatus.textContent = status;
       });
     } catch (error) {
@@ -492,6 +493,67 @@
     return image;
   }
 
+  async function loadAppsDirectory() {
+    const rootUrl = new URL("./assets/apps/", document.baseURI);
+    const files = [];
+    const visitedDirectories = new Set();
+    const filePaths = new Set();
+    let totalBytes = 0;
+
+    async function scanDirectory(directoryUrl) {
+      const directoryKey = directoryUrl.href;
+      if (visitedDirectories.has(directoryKey)) return;
+      visitedDirectories.add(directoryKey);
+
+      const response = await fetch(directoryUrl);
+      if (!response.ok) throw new Error(`Could not list ${directoryUrl.pathname}.`);
+      const listing = new DOMParser().parseFromString(await response.text(), "text/html");
+      const links = [...listing.querySelectorAll("a[href]")];
+      let foundListingEntry = false;
+
+      for (const link of links) {
+        const href = link.getAttribute("href");
+        if (!href || href.startsWith("?") || href.startsWith("#")) continue;
+        const itemUrl = new URL(href, directoryUrl);
+        if (itemUrl.origin !== rootUrl.origin || !itemUrl.pathname.startsWith(rootUrl.pathname)) continue;
+        const encodedPath = itemUrl.pathname.slice(rootUrl.pathname.length);
+        if (!encodedPath) continue;
+        let relativePath;
+        try {
+          relativePath = decodeURIComponent(encodedPath);
+        } catch {
+          continue;
+        }
+        if (!relativePath || relativePath.split("/").includes(".gitkeep")) continue;
+        foundListingEntry = true;
+        itemUrl.search = "";
+        itemUrl.hash = "";
+
+        if (itemUrl.pathname.endsWith("/")) {
+          await scanDirectory(itemUrl);
+          continue;
+        }
+        if (filePaths.has(relativePath)) continue;
+        if (files.length >= 2048) throw new Error("assets/apps contains more than 2,048 files.");
+
+        const fileResponse = await fetch(itemUrl);
+        if (!fileResponse.ok) throw new Error(`Could not load assets/apps/${relativePath}.`);
+        const data = await fileResponse.arrayBuffer();
+        totalBytes += data.byteLength;
+        if (totalBytes > 128 * 1024 * 1024) throw new Error("assets/apps exceeds the 128 MB limit.");
+        files.push({ path: relativePath, data });
+        filePaths.add(relativePath);
+      }
+
+      if (!foundListingEntry && directoryUrl.href === rootUrl.href) {
+        throw new Error("The web server does not allow listing assets/apps. Use a server with directory listings enabled.");
+      }
+    }
+
+    await scanDirectory(rootUrl);
+    return files;
+  }
+
   async function runInMsDos() {
     saveCurrentFile();
     if (!currentFile || !/\.BAT$/i.test(currentFile)) {
@@ -503,12 +565,13 @@
     dosStatus.textContent = "Loading assets/MS-DOS.img...";
     if (!dosDialog.open) dosDialog.showModal();
     try {
+      const appFiles = await loadAppsDirectory();
       const image = await loadBootImage(BOOT_IMAGES.msdos.file);
       if (image.byteLength < 160 * 1024 || image.byteLength > 2.88 * 1024 * 1024 || image.byteLength % 512 !== 0) {
         throw new Error("assets/MS-DOS.img must be a bootable floppy image between 160 KB and 2.88 MB.");
       }
       if (!dosDialog.open) return;
-      await window.FreeDosRunner.runMsDos(files[currentFile], image, dosScreen, status => {
+      await window.FreeDosRunner.runMsDos(files[currentFile], image, appFiles, dosScreen, status => {
         dosStatus.textContent = status;
       });
     } catch (error) {
@@ -540,13 +603,23 @@
     }
 
     try {
+      const appFiles = await loadAppsDirectory();
       const image = await loadBootImage(file);
       if (!dosDialog.open) return;
-      await window.FreeDosRunner.runImage(image, drive, dosScreen, status => {
+      await window.FreeDosRunner.runImage(image, drive, appFiles, dosScreen, status => {
         dosStatus.textContent = status;
       }, osName, memorySize);
     } catch (error) {
       console.error(`Could not start ${osName}:`, error);
+      if (document.fullscreenElement === dosScreen) {
+        try {
+          await document.exitFullscreen();
+        } catch (fullscreenError) {
+          console.warn("Could not exit fullscreen mode:", fullscreenError);
+        }
+      }
+      dosScreen.hidden = true;
+      emulatorOptions.hidden = false;
       dosStatus.textContent = `Unable to start ${osName}: ${error.message}`;
     }
   }
