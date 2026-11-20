@@ -42,7 +42,7 @@
     view.setUint16(22, 9, true);
     view.setUint16(24, 18, true);
     view.setUint16(26, 2, true);
-    image.set(new TextEncoder().encode("FREEDOS "), 43);
+    image.set(new TextEncoder().encode("BATCHRUN"), 43);
     image.set(new TextEncoder().encode("FAT12   "), 54);
     image[510] = 0x55;
     image[511] = 0xaa;
@@ -69,11 +69,11 @@
     return image.buffer;
   }
 
-  function waitForEvent(instance, eventName, timeoutMs) {
+  function waitForEvent(instance, eventName, timeoutMs, osName) {
     return new Promise((resolve, reject) => {
       const timeout = window.setTimeout(() => {
         cleanup();
-        reject(new Error("Timed out while loading the FreeDOS virtual machine."));
+        reject(new Error(`Timed out while loading the ${osName} virtual machine.`));
       }, timeoutMs);
       const onEvent = () => {
         cleanup();
@@ -94,42 +94,86 @@
     });
   }
 
-  async function run(source, screen, onStatus) {
+  async function startMachine({ disks, memorySize, osName, screen, onStatus, batch = false }) {
     if (!window.WebAssembly) throw new Error("This browser does not support WebAssembly.");
     if (!window.V86) throw new Error("The bundled emulator library could not be loaded. Reload the page and try again.");
     if (emulator) await stop();
     const activeRunId = ++runId;
 
-    const floppy = createBatchFloppy(source);
     screen.querySelector("canvas").hidden = false;
-    onStatus("Starting the FreeDOS virtual machine...");
+    onStatus(`Starting the ${osName} virtual machine...`);
     emulator = new window.V86({
       wasm_path: `${V86_BASE}build/v86.wasm`,
-      memory_size: 16 * 1024 * 1024,
+      memory_size: memorySize,
       vga_memory_size: 2 * 1024 * 1024,
       screen_container: screen,
       bios: { url: `${V86_BASE}bios/seabios.bin` },
       vga_bios: { url: `${V86_BASE}bios/vgabios.bin` },
-      fda: { url: FREEDOS_IMAGE, size: 737280 },
-      fdb: { buffer: floppy },
+      ...disks,
       autostart: true,
       fastboot: true,
       disable_speaker: true
     });
 
     const runningEmulator = emulator;
-    await waitForEvent(runningEmulator, "emulator-loaded", 60_000);
+    await waitForEvent(runningEmulator, "emulator-loaded", 60_000, osName);
     if (activeRunId !== runId || runningEmulator !== emulator) {
-      throw new Error("FreeDOS startup was cancelled.");
+      throw new Error(`${osName} startup was cancelled.`);
     }
-    onStatus("Booting FreeDOS...");
-    const promptFound = await runningEmulator.wait_until_vga_screen_contains("A:\\>", { timeout_msec: 60_000 });
-    if (activeRunId !== runId || runningEmulator !== emulator) return;
-    if (!promptFound) {
-      throw new Error("FreeDOS did not reach its command prompt. You can try booting again.");
+    onStatus(`Booting ${osName}...`);
+    if (batch) {
+      const promptFound = await runningEmulator.wait_until_vga_screen_contains("A:\\>", { timeout_msec: 60_000 });
+      if (activeRunId !== runId || runningEmulator !== emulator) return;
+      if (!promptFound) {
+        throw new Error(`${osName} did not reach its A:\\> prompt. Check that the selected floppy image is bootable.`);
+      }
+      runningEmulator.keyboard_send_text("B:\\RUN.BAT\r");
+      onStatus(`Running your batch file in ${osName}. It is also available as B:\\RUN.BAT.`);
     }
-    runningEmulator.keyboard_send_text("B:\\RUN.BAT\r");
-    onStatus("Running your batch file in FreeDOS. It is also available as B:\\RUN.BAT.");
+  }
+
+  async function run(source, screen, onStatus) {
+    const floppy = createBatchFloppy(source);
+    await startMachine({
+      disks: {
+        fda: { url: FREEDOS_IMAGE, size: 737280 },
+        fdb: { buffer: floppy }
+      },
+      memorySize: 16 * 1024 * 1024,
+      osName: "FreeDOS",
+      screen,
+      onStatus,
+      batch: true
+    });
+  }
+
+  async function runMsDos(source, bootImage, screen, onStatus) {
+    if (!(bootImage instanceof ArrayBuffer) || !bootImage.byteLength) {
+      throw new Error("Choose a non-empty MS-DOS floppy image.");
+    }
+    const floppy = createBatchFloppy(source);
+    await startMachine({
+      disks: {
+        fda: { buffer: bootImage },
+        fdb: { buffer: floppy }
+      },
+      memorySize: 16 * 1024 * 1024,
+      osName: "MS-DOS",
+      screen,
+      onStatus,
+      batch: true
+    });
+  }
+
+  async function runImage(image, drive, screen, onStatus, osName, memorySize) {
+    if (!(image instanceof ArrayBuffer) || !image.byteLength) {
+      throw new Error("Choose a non-empty bootable disk image.");
+    }
+    if (!["fda", "hda", "cdrom"].includes(drive)) {
+      throw new Error("Choose a supported disk image type.");
+    }
+    const disks = { [drive]: { buffer: image } };
+    await startMachine({ disks, memorySize, osName, screen, onStatus });
   }
 
   async function stop() {
@@ -140,5 +184,5 @@
     await current.destroy();
   }
 
-  window.FreeDosRunner = { run, stop };
+  window.FreeDosRunner = { run, runMsDos, runImage, stop };
 })();

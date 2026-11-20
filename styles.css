@@ -79,6 +79,7 @@ button:focus-visible, a:focus-visible, [role="button"]:focus-visible, textarea:f
   font-size: 11px;
   -webkit-app-region: no-drag;
 }
+.emulator-section-button { border: 0; background: transparent; cursor: pointer; }
 .github-link:hover { background: #454545; }
 .github-link span { color: #75beff; }
 
@@ -446,11 +447,46 @@ main { width: 100%; height: calc(100dvh - 36px); }
 .dos-dialog-heading > div { display: flex; align-items: center; gap: 8px; }
 .dos-dialog-heading strong { font-weight: 400; }
 .dos-dialog-heading button { padding: 5px 8px; border: 1px solid #484848; border-radius: 3px; background: #303030; color: #c5c5c5; font: 9px var(--mono); cursor: pointer; }
-.dos-screen { min-height: min(360px, 55dvh); max-height: 60dvh; display: grid; place-items: start center; overflow: auto; padding: 12px; background: #000; color: #d4d4d4; }
+.dos-screen { min-height: min(360px, 55dvh); max-height: 60dvh; display: grid; place-items: center; overflow: auto; padding: 12px; background: #000; color: #d4d4d4; }
 .dos-screen > div { min-width: 100%; white-space: pre; font: 14px/14px var(--mono); }
-.dos-screen canvas { max-width: 100%; height: auto; image-rendering: pixelated; }
+.dos-screen canvas { max-width: 100%; max-height: 100%; height: auto; image-rendering: pixelated; }
 .dos-status { margin: 10px 0 4px; color: #75beff; font: 10px var(--mono); }
 .dos-note { margin: 0; color: #999; font-size: 10px; }
+.dos-screen[hidden], .emulator-options[hidden] { display: none; }
+.emulator-options { padding: 18px 12px; }
+.emulator-options h1 { margin: 0 0 8px; color: #ddd; font-size: 18px; font-weight: 500; }
+.emulator-options p { max-width: 680px; color: #aaa; font-size: 12px; line-height: 1.5; }
+.emulator-controls { max-width: 480px; display: grid; grid-template-columns: 1fr; gap: 8px; margin-top: 20px; }
+.emulator-controls label { color: #bdbdbd; font: 10px var(--mono); }
+.emulator-controls select, .emulator-controls output {
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 8px;
+  border: 1px solid #484848;
+  border-radius: 3px;
+  background: #151515;
+  color: #ddd;
+  font-size: 12px;
+}
+.emulator-controls output { overflow-wrap: anywhere; }
+.emulator-controls .run-button { justify-self: start; margin-top: 8px; }
+.run-button:disabled { border-color: #444; background: #333; color: #858585; cursor: not-allowed; }
+.emulator-options .emulator-image-note { margin-top: 22px; color: #858585; font-size: 11px; }
+.dos-screen:fullscreen {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
+  min-height: 0;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  overflow: hidden;
+}
+.dos-screen:fullscreen canvas { width: 100%; height: 100%; max-width: none; max-height: none; object-fit: fill; }
 
 @media (max-width: 760px) {
   .workspace { grid-template-columns: 44px 165px minmax(0, 1fr); }

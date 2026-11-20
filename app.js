@@ -6,6 +6,11 @@
     "START.BAT": "@ECHO OFF\r\nREM Welcome to FreeDOS Studio!\r\nECHO Hello, DOS world!\r\nECHO.\r\nECHO Your batch file is running in the browser.\r\nECHO Type HELP in the prompt to see what you can do.\r\n",
     "README.TXT": "Welcome to FreeDOS Studio!\r\n\r\nEdit START.BAT and click Run batch.\r\nYour files live in this browser's local storage.\r\nType HELP in the command prompt for supported commands.\r\n"
   };
+  const BOOT_IMAGES = {
+    msdos: { file: "MS-DOS.img", drive: "fda", name: "MS-DOS", memorySize: 16 * 1024 * 1024 },
+    kolibri: { file: "KolibriOS.img", drive: "fda", name: "KolibriOS", memorySize: 32 * 1024 * 1024 },
+    windows95: { file: "win95.img", drive: "hda", name: "Windows 95", memorySize: 128 * 1024 * 1024 }
+  };
   const MAX_BATCH_STEPS = 1000;
 
   const editor = document.querySelector("#editor");
@@ -25,6 +30,9 @@
   const dosDialog = document.querySelector("#dos-dialog");
   const dosScreen = document.querySelector("#dos-screen");
   const dosStatus = document.querySelector("#dos-status");
+  const emulatorOptions = document.querySelector("#emulator-options");
+  const emulatorOsInput = document.querySelector("#emulator-os");
+  const emulatorImageName = document.querySelector("#emulator-image-name");
   const files = loadFiles();
   const directories = new Set(["C:\\"]);
   const variables = Object.create(null);
@@ -437,8 +445,7 @@
       return;
     }
 
-    dosScreen.querySelector("div").textContent = "";
-    dosScreen.querySelector("canvas").hidden = true;
+    prepareEmulatorScreen("FREEDOS EMULATOR");
     dosStatus.textContent = "Loading the FreeDOS emulator. The first launch may take a moment.";
     dosDialog.showModal();
     try {
@@ -451,8 +458,108 @@
     }
   }
 
+  function prepareEmulatorScreen(title) {
+    document.querySelector("#dos-dialog-title").textContent = title;
+    emulatorOptions.hidden = true;
+    dosScreen.hidden = false;
+    dosScreen.querySelector("div").textContent = "";
+    dosScreen.querySelector("canvas").hidden = true;
+  }
+
+  function openEmulatorSection() {
+    document.querySelector("#dos-dialog-title").textContent = "EMULATOR SECTION";
+    emulatorOptions.hidden = false;
+    dosScreen.hidden = true;
+    updateEmulatorImageName();
+    dosStatus.textContent = "Ready.";
+    if (!dosDialog.open) dosDialog.showModal();
+  }
+
+  function updateEmulatorImageName() {
+    emulatorImageName.textContent = `assets/${BOOT_IMAGES[emulatorOsInput.value].file}`;
+  }
+
+  async function loadBootImage(imageFileName) {
+    const response = await fetch(`./assets/${imageFileName}`);
+    if (!response.ok) {
+      throw new Error(`Could not load assets/${imageFileName}. Add the bootable image to the assets folder and try again.`);
+    }
+    const image = await response.arrayBuffer();
+    if (!image.byteLength) throw new Error(`assets/${imageFileName} is empty.`);
+    if (image.byteLength > 256 * 1024 * 1024) {
+      throw new Error(`assets/${imageFileName} must be 256 MB or smaller.`);
+    }
+    return image;
+  }
+
+  async function runInMsDos() {
+    saveCurrentFile();
+    if (!currentFile || !/\.BAT$/i.test(currentFile)) {
+      appendOutput("MS-DOS runs .BAT files. Select or import a .BAT file first.", "error");
+      return;
+    }
+
+    prepareEmulatorScreen("MS-DOS BATCH RUNNER");
+    dosStatus.textContent = "Loading assets/MS-DOS.img...";
+    if (!dosDialog.open) dosDialog.showModal();
+    try {
+      const image = await loadBootImage(BOOT_IMAGES.msdos.file);
+      if (image.byteLength < 160 * 1024 || image.byteLength > 2.88 * 1024 * 1024 || image.byteLength % 512 !== 0) {
+        throw new Error("assets/MS-DOS.img must be a bootable floppy image between 160 KB and 2.88 MB.");
+      }
+      if (!dosDialog.open) return;
+      await window.FreeDosRunner.runMsDos(files[currentFile], image, dosScreen, status => {
+        dosStatus.textContent = status;
+      });
+    } catch (error) {
+      console.error("Could not start MS-DOS:", error);
+      dosStatus.textContent = `Unable to start MS-DOS: ${error.message}`;
+    }
+  }
+
+  async function startSelectedEmulator() {
+    const bootImage = BOOT_IMAGES[emulatorOsInput.value];
+    if (!bootImage) {
+      dosStatus.textContent = "Choose a supported operating system.";
+      return;
+    }
+    const { file, drive, name: osName, memorySize } = bootImage;
+    prepareEmulatorScreen(`${osName.toUpperCase()} EMULATOR`);
+    dosStatus.textContent = `Loading assets/${file}...`;
+
+    if (typeof dosScreen.requestFullscreen !== "function") {
+      dosStatus.textContent = "Fullscreen is unavailable in this browser. The emulator was not started.";
+      return;
+    }
+    try {
+      await dosScreen.requestFullscreen();
+    } catch (error) {
+      console.warn("Could not enter fullscreen mode:", error);
+      dosStatus.textContent = `Could not enter fullscreen mode: ${error.message}`;
+      return;
+    }
+
+    try {
+      const image = await loadBootImage(file);
+      if (!dosDialog.open) return;
+      await window.FreeDosRunner.runImage(image, drive, dosScreen, status => {
+        dosStatus.textContent = status;
+      }, osName, memorySize);
+    } catch (error) {
+      console.error(`Could not start ${osName}:`, error);
+      dosStatus.textContent = `Unable to start ${osName}: ${error.message}`;
+    }
+  }
+
   async function closeFreeDos() {
     await window.FreeDosRunner.stop();
+    if (document.fullscreenElement && document.exitFullscreen) {
+      try {
+        await document.exitFullscreen();
+      } catch (error) {
+        console.warn("Could not exit fullscreen mode:", error);
+      }
+    }
     if (dosDialog.open) dosDialog.close();
   }
 
@@ -504,6 +611,13 @@
     renderFiles();
   });
   document.querySelector("#run-freedos").addEventListener("click", runInFreeDos);
+  document.querySelector("#run-msdos").addEventListener("click", () => {
+    runInMsDos();
+  });
+  document.querySelector("#open-emulators").addEventListener("click", openEmulatorSection);
+  emulatorOsInput.addEventListener("change", updateEmulatorImageName);
+  updateEmulatorImageName();
+  document.querySelector("#start-emulator").addEventListener("click", startSelectedEmulator);
   document.querySelector("#close-dos").addEventListener("click", closeFreeDos);
   dosDialog.addEventListener("cancel", event => {
     event.preventDefault();
