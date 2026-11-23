@@ -9,7 +9,7 @@
   const BOOT_IMAGES = {
     msdos: { file: "MS-DOS.img", drive: "fda", name: "MS-DOS", memorySize: 16 * 1024 * 1024 },
     kolibri: { file: "KolibriOS.img", drive: "fda", name: "KolibriOS", memorySize: 32 * 1024 * 1024 },
-    windows95: { file: "win95.img", drive: "hda", name: "Windows 95", memorySize: 128 * 1024 * 1024 }
+    windows95: { name: "Windows 95", memorySize: 128 * 1024 * 1024 }
   };
   const MAX_BATCH_STEPS = 1000;
 
@@ -30,9 +30,15 @@
   const dosDialog = document.querySelector("#dos-dialog");
   const dosScreen = document.querySelector("#dos-screen");
   const dosStatus = document.querySelector("#dos-status");
+  const dosNote = document.querySelector(".dos-note");
   const emulatorOptions = document.querySelector("#emulator-options");
   const emulatorOsInput = document.querySelector("#emulator-os");
   const emulatorImageName = document.querySelector("#emulator-image-name");
+  const windows95MediaOptions = document.querySelector("#windows95-media-options");
+  const windows95FloppyInput = document.querySelector("#windows95-floppies");
+  const windows95FloppySummary = document.querySelector("#windows95-floppy-summary");
+  const windows95FloppyControls = document.querySelector("#windows95-floppy-controls");
+  const windows95ActiveFloppy = document.querySelector("#windows95-active-floppy");
   const files = loadFiles();
   const directories = new Set(["C:\\"]);
   const variables = Object.create(null);
@@ -463,21 +469,67 @@
     document.querySelector("#dos-dialog-title").textContent = title;
     emulatorOptions.hidden = true;
     dosScreen.hidden = false;
-    dosScreen.querySelector("div").textContent = "";
+    dosStatus.hidden = false;
+    dosNote.hidden = false;
+    dosScreen.querySelector(".dos-text").textContent = "";
     dosScreen.querySelector("canvas").hidden = true;
+    windows95FloppyControls.hidden = true;
   }
 
   function openEmulatorSection() {
     document.querySelector("#dos-dialog-title").textContent = "EMULATOR SECTION";
     emulatorOptions.hidden = false;
     dosScreen.hidden = true;
+    dosStatus.hidden = false;
+    dosNote.hidden = false;
     updateEmulatorImageName();
     dosStatus.textContent = "Ready.";
     if (!dosDialog.open) dosDialog.showModal();
   }
 
   function updateEmulatorImageName() {
-    emulatorImageName.textContent = `assets/${BOOT_IMAGES[emulatorOsInput.value].file}`;
+    const isWindows95 = emulatorOsInput.value === "windows95";
+    windows95MediaOptions.hidden = !isWindows95;
+    emulatorImageName.textContent = isWindows95
+      ? "256 MiB persistent C: drive (this browser)"
+      : `assets/${BOOT_IMAGES[emulatorOsInput.value].file}`;
+  }
+
+  async function loadSelectedWindows95Floppies() {
+    const selectedFiles = [...windows95FloppyInput.files]
+      .sort((left, right) => left.name.localeCompare(right.name, undefined, { numeric: true, sensitivity: "base" }));
+    if (!selectedFiles.length) {
+      throw new Error("Select the Windows 95 setup floppy .img files first.");
+    }
+    if (selectedFiles.length > 32) {
+      throw new Error("Select no more than 32 Windows 95 setup floppy images.");
+    }
+    return Promise.all(selectedFiles.map(async file => ({
+      name: file.name,
+      buffer: await file.arrayBuffer()
+    })));
+  }
+
+  function showWindows95FloppyControls(floppies) {
+    windows95ActiveFloppy.replaceChildren();
+    for (const [index, floppy] of floppies.entries()) {
+      const option = document.createElement("option");
+      option.value = String(index);
+      option.textContent = floppy.name;
+      windows95ActiveFloppy.append(option);
+    }
+    windows95FloppyControls.hidden = false;
+  }
+
+  async function insertSelectedWindows95Floppy() {
+    try {
+      const floppyIndex = Number(windows95ActiveFloppy.value);
+      await window.FreeDosRunner.insertWindows95Floppy(floppyIndex);
+      dosStatus.textContent = `Inserted ${windows95ActiveFloppy.selectedOptions[0].textContent} in drive A:.`;
+    } catch (error) {
+      console.error("Could not insert the Windows 95 setup floppy:", error);
+      dosStatus.textContent = `Unable to insert setup floppy: ${error.message}`;
+    }
   }
 
   async function loadBootImage(imageFileName) {
@@ -495,62 +547,39 @@
 
   async function loadAppsDirectory() {
     const rootUrl = new URL("./assets/apps/", document.baseURI);
+    const manifestUrl = new URL("manifest.json", rootUrl);
     const files = [];
-    const visitedDirectories = new Set();
     const filePaths = new Set();
     let totalBytes = 0;
 
-    async function scanDirectory(directoryUrl) {
-      const directoryKey = directoryUrl.href;
-      if (visitedDirectories.has(directoryKey)) return;
-      visitedDirectories.add(directoryKey);
+    const manifestResponse = await fetch(manifestUrl);
+    if (!manifestResponse.ok) {
+      throw new Error("Could not load assets/apps/manifest.json. Check that the app manifest exists.");
+    }
+    const appPaths = await manifestResponse.json();
+    if (!Array.isArray(appPaths) || appPaths.some(path => typeof path !== "string")) {
+      throw new Error("assets/apps/manifest.json must contain an array of file paths.");
+    }
+    if (appPaths.length > 2048) throw new Error("assets/apps contains more than 2,048 files.");
 
-      const response = await fetch(directoryUrl);
-      if (!response.ok) throw new Error(`Could not list ${directoryUrl.pathname}.`);
-      const listing = new DOMParser().parseFromString(await response.text(), "text/html");
-      const links = [...listing.querySelectorAll("a[href]")];
-      let foundListingEntry = false;
-
-      for (const link of links) {
-        const href = link.getAttribute("href");
-        if (!href || href.startsWith("?") || href.startsWith("#")) continue;
-        const itemUrl = new URL(href, directoryUrl);
-        if (itemUrl.origin !== rootUrl.origin || !itemUrl.pathname.startsWith(rootUrl.pathname)) continue;
-        const encodedPath = itemUrl.pathname.slice(rootUrl.pathname.length);
-        if (!encodedPath) continue;
-        let relativePath;
-        try {
-          relativePath = decodeURIComponent(encodedPath);
-        } catch {
-          continue;
-        }
-        if (!relativePath || relativePath.split("/").includes(".gitkeep")) continue;
-        foundListingEntry = true;
-        itemUrl.search = "";
-        itemUrl.hash = "";
-
-        if (itemUrl.pathname.endsWith("/")) {
-          await scanDirectory(itemUrl);
-          continue;
-        }
-        if (filePaths.has(relativePath)) continue;
-        if (files.length >= 2048) throw new Error("assets/apps contains more than 2,048 files.");
-
-        const fileResponse = await fetch(itemUrl);
-        if (!fileResponse.ok) throw new Error(`Could not load assets/apps/${relativePath}.`);
-        const data = await fileResponse.arrayBuffer();
-        totalBytes += data.byteLength;
-        if (totalBytes > 128 * 1024 * 1024) throw new Error("assets/apps exceeds the 128 MB limit.");
-        files.push({ path: relativePath, data });
-        filePaths.add(relativePath);
+    for (const relativePath of appPaths) {
+      const pathParts = relativePath.split("/");
+      if (!relativePath || relativePath.includes("\\") ||
+          pathParts.some(part => !part || part === "." || part === "..")) {
+        throw new Error(`Invalid app path in assets/apps/manifest.json: ${relativePath}`);
       }
+      if (filePaths.has(relativePath)) throw new Error(`Duplicate app path in assets/apps/manifest.json: ${relativePath}`);
 
-      if (!foundListingEntry && directoryUrl.href === rootUrl.href) {
-        throw new Error("The web server does not allow listing assets/apps. Use a server with directory listings enabled.");
-      }
+      const itemUrl = new URL(pathParts.map(encodeURIComponent).join("/"), rootUrl);
+      const fileResponse = await fetch(itemUrl);
+      if (!fileResponse.ok) throw new Error(`Could not load assets/apps/${relativePath}.`);
+      const data = await fileResponse.arrayBuffer();
+      totalBytes += data.byteLength;
+      if (totalBytes > 128 * 1024 * 1024) throw new Error("assets/apps exceeds the 128 MB limit.");
+      files.push({ path: relativePath, data });
+      filePaths.add(relativePath);
     }
 
-    await scanDirectory(rootUrl);
     return files;
   }
 
@@ -587,8 +616,13 @@
       return;
     }
     const { file, drive, name: osName, memorySize } = bootImage;
+    const isWindows95 = emulatorOsInput.value === "windows95";
+    if (isWindows95 && !windows95FloppyInput.files.length) {
+      dosStatus.textContent = "Select the Windows 95 setup floppy .img files first.";
+      return;
+    }
     prepareEmulatorScreen(`${osName.toUpperCase()} EMULATOR`);
-    dosStatus.textContent = `Loading assets/${file}...`;
+    dosStatus.textContent = isWindows95 ? "Loading Windows 95 setup media..." : `Loading assets/${file}...`;
 
     if (typeof dosScreen.requestFullscreen !== "function") {
       dosStatus.textContent = "Fullscreen is unavailable in this browser. The emulator was not started.";
@@ -604,11 +638,20 @@
 
     try {
       const appFiles = await loadAppsDirectory();
-      const image = await loadBootImage(file);
       if (!dosDialog.open) return;
-      await window.FreeDosRunner.runImage(image, drive, appFiles, dosScreen, status => {
-        dosStatus.textContent = status;
-      }, osName, memorySize);
+      if (isWindows95) {
+        const floppies = await loadSelectedWindows95Floppies();
+        showWindows95FloppyControls(floppies);
+        windows95FloppySummary.textContent = `${floppies.length} setup floppy image(s) selected.`;
+        await window.FreeDosRunner.runWindows95(floppies, appFiles, dosScreen, status => {
+          dosStatus.textContent = status;
+        });
+      } else {
+        const image = await loadBootImage(file);
+        await window.FreeDosRunner.runImage(image, drive, appFiles, dosScreen, status => {
+          dosStatus.textContent = status;
+        }, osName, memorySize);
+      }
     } catch (error) {
       console.error(`Could not start ${osName}:`, error);
       if (document.fullscreenElement === dosScreen) {
@@ -620,12 +663,19 @@
       }
       dosScreen.hidden = true;
       emulatorOptions.hidden = false;
+      windows95FloppyControls.hidden = true;
       dosStatus.textContent = `Unable to start ${osName}: ${error.message}`;
     }
   }
 
   async function closeFreeDos() {
-    await window.FreeDosRunner.stop();
+    try {
+      await window.FreeDosRunner.stop();
+    } catch (error) {
+      console.error("Could not save the virtual disk before closing:", error);
+      dosStatus.textContent = `Unable to save the Windows 95 disk: ${error.message}`;
+      return;
+    }
     if (document.fullscreenElement && document.exitFullscreen) {
       try {
         await document.exitFullscreen();
@@ -689,6 +739,12 @@
   });
   document.querySelector("#open-emulators").addEventListener("click", openEmulatorSection);
   emulatorOsInput.addEventListener("change", updateEmulatorImageName);
+  windows95FloppyInput.addEventListener("change", () => {
+    windows95FloppySummary.textContent = windows95FloppyInput.files.length
+      ? `${windows95FloppyInput.files.length} setup floppy image(s) selected.`
+      : "No setup disks selected.";
+  });
+  document.querySelector("#insert-windows95-floppy").addEventListener("click", insertSelectedWindows95Floppy);
   updateEmulatorImageName();
   document.querySelector("#start-emulator").addEventListener("click", startSelectedEmulator);
   document.querySelector("#close-dos").addEventListener("click", closeFreeDos);
