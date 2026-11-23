@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#090a0d">
+    <meta name="description" content="Browse and play your browser game collection.">
+    <title>Game Library — FreeDOS Studio</title>
+    <link rel="stylesheet" href="./styles.css">
+    <script type="module" src="./menu.js"></script>
+  </head>
+  <body class="home-page">
+    <header class="home-status-bar">
+      <a class="studio-link" href="../index.html"><span aria-hidden="true">‹</span> FreeDOS Studio</a>
+      <div class="home-profile">
+        <span class="profile-avatar" aria-hidden="true">P1</span>
+        <span>Player 1</span>
+      </div>
+      <time id="system-time" class="system-time"></time>
+    </header>
+
+    <main class="home-main">
+      <div class="library-heading">
+        <h1 id="featured-title">Games</h1>
+        <p id="library-status" class="library-status" role="status" aria-live="polite">Loading games…</p>
+      </div>
+
+      <section class="software-section" aria-label="Your games">
+        <div class="software-heading">
+          <h2>All games</h2>
+          <div class="scroll-controls" aria-label="Scroll through games">
+            <button id="scroll-left" type="button" aria-label="Scroll games left" disabled>‹</button>
+            <button id="scroll-right" type="button" aria-label="Scroll games right" disabled>›</button>
+          </div>
+        </div>
+        <div id="game-strip" class="game-strip" aria-label="Game tiles"></div>
+        <p class="navigation-hint"><kbd>←</kbd><kbd>→</kbd> BROWSE <span>·</span> <kbd>ENTER</kbd> OPEN GAME</p>
+      </section>
+    </main>
+
+    <footer class="home-footer">
+      <a href="../index.html">Back to Studio</a>
+      <button id="refresh-games" type="button">Refresh games</button>
+      <span>Choose a tile to open it in a new tab</span>
+    </footer>
+  </body>
+</html>

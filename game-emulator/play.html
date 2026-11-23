@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#090a0d">
+    <title>Now Playing — FreeDOS Studio</title>
+    <link rel="stylesheet" href="./styles.css">
+    <script src="../assets/v86/build/libv86.js" defer></script>
+    <script src="../freedos.js" defer></script>
+    <script type="module" src="./player.js"></script>
+  </head>
+  <body class="player-page">
+    <main id="game-stage" class="game-stage" aria-label="Game screen">
+      <iframe id="html-player" class="html-player" title="HTML game" sandbox="allow-scripts allow-pointer-lock" allow="autoplay; fullscreen" allowfullscreen hidden></iframe>
+      <div id="rom-player" class="rom-player" hidden></div>
+      <iframe id="local-rom-player" class="local-rom-player" title="Local Game Boy emulator" sandbox="allow-scripts allow-same-origin allow-pointer-lock" allow="autoplay; fullscreen" allowfullscreen hidden></iframe>
+      <div id="dos-player" class="dos-player" aria-label="DOS game screen" hidden>
+        <div></div>
+        <canvas hidden></canvas>
+      </div>
+      <header class="game-hud">
+        <a class="game-back" href="./index.html"><span aria-hidden="true">←</span> GAME LIBRARY</a>
+        <span id="player-title" class="player-title">Loading game…</span>
+        <button id="fullscreen-button" class="fullscreen-button" type="button">⛶ FULLSCREEN</button>
+      </header>
+      <p id="player-status" class="player-status" role="status" aria-live="polite">Starting game…</p>
+    </main>
+  </body>
+</html>
