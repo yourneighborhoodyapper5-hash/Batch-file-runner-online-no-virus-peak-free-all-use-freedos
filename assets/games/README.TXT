@@ -38,3 +38,4 @@ files available under C:\APPS\GAMES\<ID>.
 
 All paths are relative to the game's folder. Do not include copyrighted
 game files unless you have permission to use them.
+
