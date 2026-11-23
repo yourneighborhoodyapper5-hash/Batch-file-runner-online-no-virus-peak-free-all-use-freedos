@@ -46,7 +46,14 @@ function createTile(game) {
   label.textContent = game.title;
   const system = document.createElement("span");
   system.className = "game-tile-system";
-  system.textContent = { html: "HTML", gb: "GAME BOY", gbc: "GAME BOY COLOR", nes: "NES", dos: "DOS" }[game.system];
+  system.textContent = {
+    html: "HTML",
+    gb: "GAME BOY",
+    gbc: "GAME BOY COLOR",
+    nes: "NES",
+    n64: "NINTENDO 64",
+    dos: "DOS"
+  }[game.system];
   tile.append(art, label, system);
   return tile;
 }

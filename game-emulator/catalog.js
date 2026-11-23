@@ -1,5 +1,18 @@
 const GAMES_ROOT = new URL("../assets/games/", import.meta.url);
-const ROM_EXTENSIONS = { gb: ".gb", gbc: ".gbc", nes: ".nes" };
+const ROM_EXTENSIONS = {
+  gb: [".gb"],
+  gbc: [".gbc"],
+  nes: [".nes"],
+  n64: [".n64", ".z64", ".v64"]
+};
+const ROM_SYSTEMS = Object.fromEntries(
+  Object.entries(ROM_EXTENSIONS).flatMap(([system, extensions]) =>
+    extensions.map(extension => [extension, system]))
+);
+
+function getFileExtension(path) {
+  return path.slice(path.lastIndexOf(".")).toLowerCase();
+}
 
 function isSafePath(path) {
   return typeof path === "string" && path.length > 0 && !path.includes("\\") &&
@@ -15,7 +28,7 @@ function validateGame(game, id) {
   if (!game || typeof game !== "object" || game.id !== id ||
       typeof game.title !== "string" || !game.title.trim() ||
       typeof game.description !== "string" ||
-      !["html", "gb", "gbc", "nes", "dos"].includes(game.system)) {
+      !["html", "gb", "gbc", "nes", "n64", "dos"].includes(game.system)) {
     throw new Error(`Invalid game metadata in assets/games/${id}/game.json.`);
   }
   if (game.cover !== undefined && !isSafePath(game.cover)) {
@@ -24,9 +37,10 @@ function validateGame(game, id) {
   if (game.system === "html" && (!isSafePath(game.entry) || !/\.html?$/i.test(game.entry))) {
     throw new Error(`HTML game ${game.title} needs a safe .html entry path.`);
   }
-  if (ROM_EXTENSIONS[game.system] &&
-      (!isSafePath(game.rom) || !game.rom.toLowerCase().endsWith(ROM_EXTENSIONS[game.system]))) {
-    throw new Error(`${game.title} needs a ${ROM_EXTENSIONS[game.system]} ROM path.`);
+  const allowedRomExtensions = ROM_EXTENSIONS[game.system];
+  if (allowedRomExtensions &&
+      (!isSafePath(game.rom) || !allowedRomExtensions.includes(getFileExtension(game.rom)))) {
+    throw new Error(`${game.title} needs a ${allowedRomExtensions.join(" or ")} ROM path.`);
   }
   if (game.system === "dos") {
     const files = game.files;
@@ -55,18 +69,19 @@ export async function loadGameCatalog() {
   const seenRootRoms = new Set();
   const games = [];
   for (const entry of gameIds) {
-    if (/\.((gb)|(gbc)|(nes))$/i.test(entry)) {
+    const extension = getFileExtension(entry);
+    const system = ROM_SYSTEMS[extension];
+    if (system) {
       if (!isSafePath(entry) || entry.includes("/") || seenRootRoms.has(entry.toLowerCase())) {
         throw new Error(`Invalid or duplicate ROM file in assets/games/manifest.json: ${entry}`);
       }
       seenRootRoms.add(entry.toLowerCase());
-      const extension = entry.slice(entry.lastIndexOf(".") + 1).toLowerCase();
       const title = entry.slice(0, entry.lastIndexOf(".")).replace(/\s+\([^)]*\)/g, "").trim();
       games.push({
         id: `rom:${entry}`,
         title: title || entry,
-        description: `${extension.toUpperCase()} game`,
-        system: extension,
+        description: `${system === "n64" ? "Nintendo 64" : extension.slice(1).toUpperCase()} game`,
+        system,
         rom: entry,
         folderUrl: GAMES_ROOT
       });
